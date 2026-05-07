@@ -162,6 +162,77 @@ docker exec -it quote-mongo mongosh quotes --eval "db.quotes.find().pretty()"
 - Next.js に `nosniff`、`DENY` frame、`same-origin` referrer、Permissions Policy を設定
 - `npm audit` が通るよう、Next.js 内部の PostCSS は `overrides` で安全な版へ固定
 
+## デプロイと商用配布について
+
+このサンプルを Vercel などにデプロイしても、アクセスしたユーザー本人のローカル Codex は使えません。
+
+Vercel に置いた Next.js の API Route は Vercel 側のサーバー上で動くため、ユーザーPCの `codex` コマンド、`~/.codex` のログイン情報、ユーザーPC上の `localhost:4500` にはアクセスできません。`localhost` はユーザーPCではなく、実行中のサーバー自身を指します。
+
+つまり、このリポジトリの方式は以下の用途に向いています。
+
+- 自分のPCで動かすローカル教材
+- clone した人が自分のPCで `codex login` して試すサンプル
+- デスクトップアプリやIDE拡張など、ユーザーPC上で `codex app-server` を子プロセスとして起動するローカルアプリ
+
+一方で、次の用途にはそのまま使えません。
+
+- Vercel にデプロイして、訪問者それぞれの ChatGPT サブスクで生成するWebサービス
+- 開発者本人の ChatGPT サブスクを裏側で使い、他人に課金サービスとして提供する構成
+- `codex app-server` を外部公開して、複数ユーザーに共有させる構成
+
+### 有料PCアプリとして配布する場合
+
+有料のPCアプリとして配布するなら、成立しうる構成は「ユーザー本人のPC上で、ユーザー本人のChatGPT/Codex認証を使う」形です。
+
+```text
+ユーザーのPC
+  ├─ あなたの有料デスクトップアプリ
+  │   ├─ UI
+  │   └─ local daemon / companion process
+  ├─ codex app-server
+  └─ ~/.codex のユーザー本人の認証情報
+```
+
+この場合、アプリが提供している価値は「UI、ワークフロー、自動化、ローカル統合」であり、OpenAI の利用枠そのものを再販売しない、という整理が重要です。
+
+実装上は、商用アプリでは WebSocket より stdio で `codex app-server` を子プロセス起動する構成が安全です。OpenAI の App Server ドキュメントでも `stdio` がデフォルトで、WebSocket は experimental / unsupported とされています。
+
+WebSocket を使う場合でも、最低限以下を守るべきです。
+
+- `127.0.0.1` のループバックだけで listen する
+- capability token などの WebSocket 認証を必ず入れる
+- 外部ネットワークに `codex app-server` を公開しない
+- local daemon 側も CORS / Origin / ランダムトークンで保護する
+- Codex の作業ディレクトリ、sandbox、approval を明示的に制限する
+- ユーザーの ChatGPT 認証情報を自分のサーバーに送らない
+
+### 現時点の実用判断
+
+2026-05-08 時点の実用判断は以下です。これは法的助言ではなく、公式ドキュメント、OpenAI ヘルプ、作者による問い合わせ記録を踏まえた開発判断メモです。最終判断は必ず最新の OpenAI 公式ドキュメントと利用規約を確認してください。
+
+| パターン | 実用判断 |
+|---|---|
+| 開発者本人のサブスクで他人にサービス提供 | NG。アカウント共有・再販売・第三者サービス提供に該当しうるため避ける |
+| 無料配布アプリ + ユーザー本人の ChatGPT/Codex 認証 | 比較的安全。ユーザー本人のPC上で動かすローカルアプリとして扱う |
+| 有料配布アプリ + ユーザー本人の OpenAI API キー | 安全寄り。商用サードパーティアプリとして最も説明しやすい |
+| 有料配布アプリ + ユーザー本人の ChatGPT/Codex 認証 | グレー。アプリ代とOpenAI利用枠を分離する建て付けは考えられるが、明確な公式ポリシー更新を待つのが無難 |
+
+重要なのは「無料か有料か」だけではなく、誰の認証情報で、どこで Codex が動き、OpenAI の利用枠を誰に提供しているかです。
+
+### 作者メモ: OpenAI への問い合わせで得た整理
+
+作者は Codex App Server を使った有料デスクトップアプリ配布について、OpenAI サポートへ複数回問い合わせました。そのやり取りから、作者は次のように整理しています。
+
+- Codex CLI / App Server のコード自体は Apache 2.0 ライセンスで、コードベースの商用利用は可能
+- ただし、OpenAI サービスへの接続方法や ChatGPT 消費者プランの使い方まで自動的に商用許可されるわけではない
+- 自分の ChatGPT サブスクを他人に使わせる形は避けるべき
+- ユーザー本人の API キー方式は、商用サードパーティアプリとして最も明確な推奨パス
+- ユーザー本人の ChatGPT/Codex 認証を使う有料ローカルアプリは、現時点では明確な前例・公式ポリシーが不足している
+- 作者の問い合わせ内容と GitHub Discussion は、OpenAI 社内のプロダクト/法務側へ共有される旨の回答を得た
+- 今後ポリシーが変わる場合は、開発者ドキュメント、ヘルプセンター、公式チャネルの更新を確認する
+
+このREADMEでは、その前提から「ローカル教材としてはOK」「Vercelに置くWebサービスとしては不可」「有料PCアプリ化はBYO ChatGPT/Codex accountで慎重に検討」という立場で説明しています。
+
 ## 実装の見どころ
 
 - `src/lib/codex.ts`: Codex App Server provider を作り、`generateText()` で名言を生成
@@ -227,3 +298,16 @@ npm run codex:models
 - エンドユーザー向け SaaS として公開する構成ではありません。
 - ChatGPT アカウント認証の Codex App Server を、開発者本人のローカル環境から使う前提です。
 - 本番サービス化する場合は、2026-05-08時点では、OpenAI API キーを使うバックエンド構成を別途検討してください。
+
+## 参考リンク
+
+- Codex App Server 公式ドキュメント: https://developers.openai.com/codex/app-server
+- OpenAI公式ブログ「Unlocking the Codex harness」: https://openai.com/index/unlocking-the-codex-harness/
+- Codex リポジトリ: https://github.com/openai/codex
+- OpenAI Terms of Use: https://openai.com/policies/terms-of-use/
+- ChatGPT Pro ヘルプ: https://help.openai.com/en/articles/9793128-what-is-chatgpt-pro
+- GitHub Discussion #8338: https://github.com/openai/codex/discussions/8338
+- GitHub Issue #10974: https://github.com/openai/codex/issues/10974
+- Sam Altman氏のOpenClaw関連投稿: https://x.com/sama/status/2050357911915028689
+- heavenOSKさんの元投稿: https://x.com/heavenOSK/status/2051031324937593245
+- あきらパパのXファクトチェック投稿: https://x.com/akira_papa_IT/status/2051752428186615937
