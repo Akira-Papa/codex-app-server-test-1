@@ -4,13 +4,26 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:3001": "next dev -p 3001",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "mongo:up": "docker compose up -d",
+    "mongo:down": "docker compose down",
+    "mongo:shell": "docker exec -it quote-mongo mongosh quotes",
+    "codex:models": "DOTENV_CONFIG_PATH=.env.local node -r dotenv/config -e \"import('ai-sdk-provider-codex-app-server').then(async ({listModels}) => console.log(JSON.stringify(await listModels({ codexPath: process.env.CODEX_PATH || undefined }), null, 2)))\""
   },
   "dependencies": {
-    "next": "16.2.5",
+    "@ai-sdk/openai": "^3.0.62",
+    "ai": "^6.0.175",
+    "ai-sdk-provider-codex-app-server": "^1.1.7",
+    "dotenv": "^17.4.2",
+    "mongoose": "^9.6.1",
+    "next": "^15.5.16",
     "react": "19.2.4",
     "react-dom": "19.2.4"
+  },
+  "overrides": {
+    "postcss": "^8.5.14"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
