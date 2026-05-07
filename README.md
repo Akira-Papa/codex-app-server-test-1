@@ -107,6 +107,24 @@ Codex App Server に見せる作業ディレクトリです。デフォルトで
 
 参考: https://developers.openai.com/codex/app-server
 
+## 公式ドキュメントとの対応
+
+OpenAI の Codex App Server ドキュメントでは、基本フローは `codex app-server` を起動し、JSON-RPC で `initialize`、`initialized`、`thread/start`、`turn/start` を送る形です。
+
+このリポジトリでは、その JSON-RPC を直接手書きせず、`ai-sdk-provider-codex-app-server` に任せています。実装上は以下の対応です。
+
+| 公式ドキュメントの要素 | このリポジトリでの扱い |
+|---|---|
+| `codex app-server` 起動 | Next.js API Route から provider が stdio で自動起動 |
+| `initialize` / `initialized` | provider が接続開始時に送信 |
+| `thread/start` | `threadMode: "stateless"` のため、生成リクエストごとに新規 thread を作成 |
+| `turn/start` | `generateText()` 呼び出し時に、テーマ入力を turn として送信 |
+| `model/list` | `npm run codex:models` で利用可能モデル確認に使用 |
+| WebSocket transport | 未使用。公式でも experimental / unsupported なので、このサンプルでは stdio を採用 |
+| conversation history / approvals UI / streaming events UI | 未実装。名言生成に絞った最小サンプル |
+
+つまり、このサンプルは「App Server の全機能を実装した rich client」ではなく、「Next.js の API Route から Codex App Server を呼び、ChatGPT アカウント認証で 1 ターン生成する」ための最小サンプルです。
+
 ## 使い方
 
 1. Docker Desktop を起動
